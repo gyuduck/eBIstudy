@@ -33,6 +33,7 @@ export default {
   components: {
     CartProductComponent,
   },
+  mixins: [priceMixin],
   props: {
     group: Array,
   },
@@ -40,20 +41,21 @@ export default {
     return {
       trNo: this.group[0].trNo,
       groupTotalPrice: 0,
-      checked: false,
+      checked: true,
     }
   },
   created: function() {
     this.calculateGroupPrice();
   },
-  mixins: [priceMixin],
-  // computed: {
-  //   computedGroupPrice: function() {
-  //     return this.groupTotalPrice.toLocaleString('ko-KR');
-  //   }
-  // },
+  watch: {
+    group(value) {
+      console.log('watch group', value);
+      this.calculateGroupPrice();
+    }
+  },
   methods: {
     calculateGroupPrice: function() {
+      this.groupTotalPrice = 0;
       this.group.forEach(item => {
         this.groupTotalPrice += item.slPrc*item.odQty;
       })

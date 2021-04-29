@@ -26,7 +26,7 @@
 
         <cart-group-component
           class="cartGroup"
-          v-for="group, index in this.groupingCartArr"
+          v-for="group, index in this.groups"
           :group="group"
           :key="index"
         />
@@ -41,7 +41,7 @@
             <div class="priceList">
               <dl>
                 <dt> 상품금액 </dt>
-                <dd> {{setComma(this.totalPrice)}}원 </dd>
+                <dd>{{setComma(totalPrice)}}원 </dd>
               </dl>
               <dl>
                 <dt> 배송비 </dt>
@@ -53,9 +53,9 @@
               </dl>
             </div>
             <dl class="totalPrice">
-              <dt>총 {{this.totalOdQty}}건</dt>
+              <dt>총 {{totalOdQty}}건</dt>
               <dt class="price">
-                <strong>{{setComma(this.totalPrice)}}</strong>
+                <strong>{{setComma(totalPrice)}}</strong>
                 <span>원</span>
               </dt>
             </dl>
@@ -68,93 +68,44 @@
 </template>
 
 <script>
-import {CartApi} from '~/api';
 import {CartGroupComponent} from '~/components';
-import {EventBus, priceMixin} from '~/utils';
+import {priceMixin} from '~/utils';
+import {mapActions, mapGetters, mapMutations, mapState} from 'vuex';
 
 export default {  
   components: { CartGroupComponent },
   name: 'CartView',
+  mixins: [priceMixin],
   data: function() {
     return {
-      originCartArr: [],
-      groupingCartArr: [],
-      totalPrice: 0,
-      totalOdQty: 0,
+      groups : [],
     }
   },
   created: async function() {
     await this.retrieveCart();
-    this.initTotalPriceAndOdQty();
-    // EventBus 이벤트 구독
-    EventBus.$on('addTotalValue', this.addTotalValue);
-    EventBus.$on('minusTotalValue', this.minusTotalValue);
-    EventBus.$on('deleteCartProduct', this.deleteCartProduct);
-    EventBus.$on('modifyCart', this.modifyCart);
+    this.initTotalValue();
+    this.groups = this.groupingCartArr;
   },
-  mixins: [priceMixin],
+  watch: {
+    groupingCartArr(value) {
+      console.log('watch groupingCartarr', value);
+      this.groups = this.groupingCartArr;
+    }
+  },
+  computed: {
+    ...mapState('CartStore', ['totalPrice', 'totalOdQty']),
+    ...mapGetters('CartStore', {groupingCartArr : 'getGroupingCartArr'}),
+  },
   methods: {
-    retrieveCart: async function() {
-      
-      await CartApi.retrieveCart()
-        .then(cart => {
-          this.originCartArr = cart;
-        });
-
-      let groupingCart = {};
-      this.originCartArr.forEach(e => {    
-        if(!Object.keys(groupingCart).includes(e.trNo)) {
-          groupingCart[e.trNo] = [];
-        }
-        groupingCart[e.trNo].push(e);
-      });
-      
-      /*
-      groupingCartArr =
-                {
-                  "LE10002" : [
-                    
-                  ],
-                  "LE10003" : [
-
-                  ],
-                  ...
-                }
-      */
-      Object.keys(groupingCart).forEach(key => {
-        this.groupingCartArr.push(groupingCart[key])
-      });
-    },
+    ...mapMutations('CartStore', ['initTotalValue']),
+    ...mapActions('CartStore',['deleteCart', 'retrieveCart']),
     selectAll: function(event) {
-      const isChecked = event.target.parentNode.querySelector('input[type=checkbox').checked;
-      event.target.parentNode.querySelector('input[type=checkbox').checked = !isChecked;
+      const isChecked = event.target.parentNode.querySelector('input[type=checkbox]').checked;
+      event.target.parentNode.querySelector('input[type=checkbox]').checked = !isChecked;
       const inputArr = event.target.parentNode.parentNode.parentNode.querySelectorAll('input[type=checkbox]');
       inputArr.forEach(element => {
         element.checked = !isChecked;
       });
-    },
-    initTotalPriceAndOdQty: function() {
-      this.originCartArr.forEach(item => {
-        this.totalPrice += item.slPrc*item.odQty;
-        this.totalOdQty += item.odQty*1;
-      });                   
-    },
-    addTotalValue: function(product) {
-      this.totalPrice += product.slPrc*1;
-      this.totalOdQty++;
-    },
-    minusTotalValue: function(product) {
-      this.totalPrice -= product.slPrc*1;
-      this.totalOdQty--;
-    },
-    modifyCart: function(product, spinner) {
-      CartApi.modify(product).then(result => {
-        result.status == "200" ? spinner.style.display="none" : '';
-      })
-    },
-    deleteCartProduct: function(productArr) {
-      CartApi.remove(productArr);
-      this.$router.go();
     },
     deleteSelected: function() {
       let cartSnArr = [];
@@ -165,17 +116,13 @@ export default {
           input.checked ? cartSnArr.push(input.value) : '';
         });
       });
-      if(cartSnArr.length > 0) {
-        CartApi.remove(cartSnArr);
-        this.$router.go();
+      if(cartSnArr.length > 0 && confirm('상품을 삭제하시겠습니까?')) {
+          this.deleteCart(cartSnArr);
+      } else {
+        alert('삭제할 상품을 선택해주세요.')
       }
     }
   },
-  beforeDestroy: function() {
-    EventBus.$off('addTotalValue');
-    EventBus.$off('minusTotalValue');
-    EventBus.$off('deleteCartProduct');
-  }
 }
 </script>
 

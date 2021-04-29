@@ -30,7 +30,7 @@
     </div>
     <div class="cartPrice">
       <p>
-        <span :id="product.cartSn" style="display: none;">
+        <span :id="'s'+product.cartSn" style="display: none;">
           <v-progress-circular
             class="spinner"
             indeterminate
@@ -51,7 +51,8 @@
 
 <script>
 import {CartProductDto} from '~/model';
-import {EventBus, priceMixin} from '~/utils';
+import {priceMixin} from '~/utils';
+import {mapActions, mapMutations} from 'vuex';
 import _ from 'loadsh';
 
 export default {
@@ -66,7 +67,10 @@ export default {
     }
   },
   created: function() {
-    this.totalPrice = this.product.slPrc * this.product.odQty;
+    this.calTotalPrice();
+  },
+  mounted: function() {
+    this.setSpinner();
   },
   mixins: [priceMixin],
   computed: {
@@ -75,39 +79,56 @@ export default {
     },
   },
   methods: {
-    plusOdQty: function(event) {
-      this.showSpinner(event);
-      
-      const price = this.product.slPrc*1; // 제품 한개 가격
-      this.product.odQty++; // 수량 ++
-      this.totalPrice += price; // 단품 총 가격에 더하기
-      EventBus.$emit('addTotalValue', this.product);  // EventBus 이벤트 발행
-      this.$emit('addGroupPrice', price); // 그룹가격 이벤트
-      this.debounceCart();  // debounce 호출
+    ...mapMutations('CartStore', ['addTotalValue', 'minusTotalValue']),
+    ...mapActions('CartStore', ['updateCart', 'deleteCart']),
+    calTotalPrice: function() {
+      this.totalPrice = this.product.slPrc * this.product.odQty;
     },
-    minusOdQty: function(event) {
-      this.showSpinner(event); // spinner 보이기
+    setSpinner: function() {
+      this.spinner = document.querySelector(`#s${this.product.cartSn}`);
+    },
+    plusOdQty: function() {
+      this.addTotalValue(this.product); // 전체 가격, 수량
+
+      this.showSpinner();
       
-      const price = this.product.slPrc*1; // 제품 한개 가격
+      // 단품 가격, 수량
+      this.totalPrice += Number(this.product.slPrc);
+      this.product.odQty++;
+      
+      this.$emit('addGroupPrice', Number(this.product.slPrc)); // 그룹가격
+
+      this.debounceUpdate();
+    },
+    minusOdQty: function() {
+      this.minusTotalValue(this.product);
+
       if(this.product.odQty > 1) {
-        this.product.odQty--; // 수량 --
-        this.totalPrice -= price; // 단품 총 가격에서 빼기
-        EventBus.$emit('minusTotalValue', this.product);  // EventBus 이벤트 발행
-        this.$emit('minusGroupPrice', price); // 그룹가격 이벤트
-        this.debounceCart();  // debounce 호출
+        this.showSpinner(); // spinner 보이기
+
+        // 단품 가격, 수량
+        this.totalPrice -= Number(this.product.slPrc);
+        this.product.odQty--;
+        
+        this.$emit('minusGroupPrice', Number(this.product.slPrc)); // 그룹가격
+        
+        this.debounceUpdate();
       } else {
         alert('최소1개까지 구매 가능한 상품입니다.');
       }
     },
-    debounceCart: _.debounce(function() {
-      EventBus.$emit('modifyCart', this.product, this.spinner);  // EventBus 이벤트 발행
-    }, 500),
+    debounceUpdate: _.debounce(function() {
+      this.updateCart(this.product).then(resp => resp.status === 200 ? this.hideSpinner() : '');
+    },500),
     deleteCartProduct: function() {
-      EventBus.$emit('deleteCartProduct', [this.product.cartSn]);
+      if(confirm('상품을 삭제하시겠습니까?'))
+        this.deleteCart([this.product.cartSn]);
     },
-    showSpinner: function(event) {
-      this.spinner = event.target.parentNode.parentNode.querySelector('span');
+    showSpinner: function() {
       this.spinner.style.display="inline";
+    },
+    hideSpinner: function() {
+      this.spinner.style.display="none";
     }
   }
 }
